@@ -8,3 +8,12 @@ output "public_ip" {
 output "admin_username" {
   value = var.admin_username
 }
+
+# Ansible inventory, generated from the real IP:
+# terraform output -raw ansible_inventory > ../ansible/inventory.ini
+output "ansible_inventory" {
+  value = <<-EOT
+    [web]
+    ${azurerm_public_ip.pip.ip_address}
+  EOT
+}
