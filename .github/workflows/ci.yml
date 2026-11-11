@@ -1,0 +1,46 @@
+# CI: runs on every pull request. Checks the code and shows what would change.
+# Nothing is created or deployed here.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write # lets the job ask GitHub for an OIDC token (Azure login)
+  contents: read
+
+env:
+  # Terraform logs into Azure as icn-devops-github using GitHub's OIDC token.
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: "true"
+  TF_VAR_ssh_public_key: ${{ vars.SSH_PUBLIC_KEY }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform format check
+        run: terraform -chdir=infra fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform -chdir=infra init -input=false -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT }}"
+
+      - name: Terraform validate
+        run: terraform -chdir=infra validate
+
+      - name: Ansible syntax check
+        run: |
+          pipx install ansible-core
+          cd ansible && ansible-playbook -i localhost, playbook.yml --syntax-check
+
+      - name: Terraform plan
+        run: terraform -chdir=infra plan -input=false
