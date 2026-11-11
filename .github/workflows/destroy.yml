@@ -1,0 +1,38 @@
+# Destroy: manual only (Actions tab → Destroy → Run workflow).
+# Deletes everything Terraform created, after approval. The state storage is kept.
+name: Destroy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: "true"
+  TF_VAR_ssh_public_key: ${{ vars.SSH_PUBLIC_KEY }}
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform init
+        run: terraform -chdir=infra init -input=false -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT }}"
+
+      - name: Terraform destroy
+        run: terraform -chdir=infra destroy -input=false -auto-approve

@@ -1,0 +1,82 @@
+# CD: runs on every push to main (i.e. after a pull request is merged).
+# Job 1 shows the plan. Job 2 waits for approval (production environment),
+# then creates/updates the VM, configures it and checks the page is live.
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # also allow a manual run from the Actions tab
+
+permissions:
+  id-token: write
+  contents: read
+
+# Never run two deployments at the same time.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: "true"
+  TF_VAR_ssh_public_key: ${{ vars.SSH_PUBLIC_KEY }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform init
+        run: terraform -chdir=infra init -input=false -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT }}"
+
+      - name: Terraform plan
+        run: terraform -chdir=infra plan -input=false
+
+  deploy:
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: production # pauses here until a reviewer approves
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform init
+        run: terraform -chdir=infra init -input=false -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT }}"
+
+      - name: Terraform apply
+        run: terraform -chdir=infra apply -input=false -auto-approve
+
+      - name: Write Ansible inventory from Terraform output
+        run: terraform -chdir=infra output -raw ansible_inventory > ansible/inventory.ini
+
+      - name: Write SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/icn-devops
+          chmod 600 ~/.ssh/icn-devops
+
+      - name: Install Ansible
+        run: pipx install ansible-core
+
+      - name: Ansible configure VM
+        run: cd ansible && ansible-playbook playbook.yml
+
+      - name: Smoke test
+        run: |
+          IP=$(terraform -chdir=infra output -raw public_ip)
+          VERSION=$(sed -n 's/.*id="version">\([^<]*\)<.*/\1/p' app/index.html)
+          curl -fsS --retry 5 --retry-delay 5 "http://$IP" | grep -q "$VERSION"
+          echo "Live at http://$IP with version $VERSION"
