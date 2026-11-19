@@ -1,16 +1,16 @@
 ---
-title: "Laboratory – DevOps and CI/CD on Azure"
+title: "Laboratory: DevOps and CI/CD on Azure"
 subtitle: "Infrastructure as Code with Terraform, Ansible and GitHub Actions"
 ---
 
-**Infrastructure and Cloud Computing (ICN) · 2026/2027 · Theme B: DevOps and CI/CD**
+**Infrastructure and Cloud Computing (ICN), 2026/2027. Theme B: DevOps and CI/CD**
 
-Group G7 · Samuel Silva (202200315)
+Group G7. Samuel Silva (202200315)
 
 | | |
 |---|---|
 | Duration | ~60 minutes |
-| Cost | ~1 cent of Azure for Students credit (VM runs < 1 hour) |
+| Cost | ~2 cents of Azure for Students credit (VM, public IP and disk for < 1 hour) |
 | Platform | Microsoft Azure (Azure for Students), GitHub |
 | Works on | Any OS with a browser (Windows, macOS, Linux) |
 
@@ -54,11 +54,11 @@ No local installation is needed. Terraform and Ansible run on GitHub's servers.
 |---|---|---|
 | `<github-username>` | `2310Samuelsilva` | Your GitHub profile |
 | `<student-number>` | `202200315` | Your student number |
-| `<owner-id>` | `164482481` | Step A4 |
-| `<repo-id>` | `1453252416` | Step A4 (your fork has its own ID) |
+| `<owner-id>` | `164482481` | Step A3 |
+| `<repo-id>` | `1453252416` | Step A3 (your fork has its own ID) |
 | `<client-id>` | `38152e2e-…` | Step B2 |
 | `<tenant-id>` | `ad28c625-…` | Step B2 |
-| `<subscription-id>` | `fea75faf-…` | Step C1 |
+| `<subscription-id>` | `fea75faf-…` | Step C2 |
 | `<storage-account>` | `icntfstate202200315` | Step B1 |
 
 ## 3. Task
@@ -67,14 +67,16 @@ Six parts. Times are indicative.
 
 | Part | What | Time |
 |---|---|---|
-| A | Fork the repository, enable Actions, create an SSH key | 10 min |
+| A | Fork the repository, enable Actions, find two IDs | 5 min |
 | B | Azure: state storage, pipeline identity, permissions | 20 min |
-| C | GitHub: variables, secret, approval environment | 10 min |
+| C | SSH key, GitHub variables and secret, approval environment | 15 min |
 | D | Run the pipeline: pull request → approve → live → idempotent rerun | 10 min |
 | E | Hands-on: change the infrastructure | 5 min |
 | F | Clean up | 5 min |
 
-### Part A – Prepare
+> Parts B and C are a one-time setup (a *bootstrap*): the pipeline needs an identity and a place for its state before it can run. Real teams often script this step too, for example with Terraform providers for Entra ID and GitHub. Everything after Part C is automated.
+
+### Part A: Prepare
 
 **A1. Fork the repository.** Open `https://github.com/2310Samuelsilva/icn-projeto-devops` → **Fork** → keep the name → **Create fork**.
 
@@ -82,22 +84,12 @@ Six parts. Times are indicative.
 
 > Do not commit anything to `main` until Part C is finished: a push to `main` starts the deployment pipeline.
 
-**A3. Create the SSH key pair Ansible will use.** In the Azure portal, open **Cloud Shell** (the `>_` icon in the top bar) → **Bash**, and run:
-
-```bash
-ssh-keygen -t rsa -b 4096 -N "" -C "icn-devops-demo" -f ~/.ssh/icn-devops
-```
-
-This creates `~/.ssh/icn-devops` (private key) and `~/.ssh/icn-devops.pub` (public key). Keep Cloud Shell open; you copy both in Part C.
-
-> Never screenshot, share or commit the private key.
-
-**A4. Find your GitHub owner ID and repository ID.** Azure needs these numbers to trust your repository. Open in the browser and note the `"id"` field of each:
+**A3. Find your GitHub owner ID and repository ID.** Azure needs these numbers to trust your repository. Open in the browser and note the `"id"` field of each:
 
 - `https://api.github.com/users/<github-username>` → `<owner-id>`
 - `https://api.github.com/repos/<github-username>/icn-projeto-devops` → `<repo-id>`
 
-### Part B – Azure: storage, identity, permissions
+### Part B: Azure: storage, identity, permissions
 
 **B1. Storage for the Terraform state.** Terraform records what it has built in a *state file*. The pipeline runs on a fresh machine every time, so the state must live somewhere permanent: an Azure Storage account.
 
@@ -118,7 +110,7 @@ Leave the other tabs on their defaults → **Review + create** → **Create**.
 
 ![Deployment succeeded](images/1b-storage-account-deployed.png)
 
-**Go to resource** → **Data storage → Containers** → **+ Add container** → Name `tfstate`, access level **Private** → **Create**.
+**Go to resource** → **Data storage → Containers** → **+ Add container** → Name `tfstate` (Anonymous access level stays **Private (no anonymous access)**) → **Create**.
 
 ![Creating the tfstate container](images/1c-container-tfstate.png)
 
@@ -151,7 +143,7 @@ Add **three** credentials, all with Organization `<github-username>`, Organizati
 | Name | Entity type | Value | Used by |
 |---|---|---|---|
 | `github-main` | Branch | `main` | Jobs on `main` without an environment (CD plan) |
-| `github-pr` | Pull request | – | CI on pull requests |
+| `github-pr` | Pull request | (none) | CI on pull requests |
 | `github-production` | Environment | `production` | Deploy and destroy jobs (behind the approval gate) |
 
 Leave the generated *Subject identifier* unchanged.
@@ -178,9 +170,19 @@ Leave the generated *Subject identifier* unchanged.
 
 ![Role assignments: the app is Contributor](images/4e-role-assignments-list.png)
 
-### Part C – GitHub: configuration and approval gate
+### Part C: GitHub: configuration and approval gate
 
-**C1. Variables and secret.** Your fork → **Settings** → **Secrets and variables** → **Actions**.
+**C1. Create the SSH key pair Ansible will use.** In the Azure portal, open **Cloud Shell** (the `>_` icon in the top bar). On first use choose **Bash**, then **No storage account required**, select your subscription → **Apply**. Then run:
+
+```bash
+ssh-keygen -t rsa -b 4096 -N "" -C "icn-devops-demo" -f ~/.ssh/icn-devops
+```
+
+This creates `~/.ssh/icn-devops` (private key) and `~/.ssh/icn-devops.pub` (public key). Without a storage account, Cloud Shell deletes these files after 20 minutes of inactivity, so go straight to C2 and paste both keys into GitHub.
+
+> Never screenshot, share or commit the private key.
+
+**C2. Variables and secret.** Your fork → **Settings** → **Secrets and variables** → **Actions**.
 
 ![Actions secrets and variables](images/5a-github-secrets-variables-page.png)
 
@@ -208,7 +210,7 @@ Find `<subscription-id>`: Portal → Subscriptions → Azure for Students → Ov
 
 ![Repository secret](images/5c-secrets-list.png)
 
-**C2. The `production` environment (approval gate).** **Settings** → **Environments** → **New environment** → `production` → **Configure environment**:
+**C3. The `production` environment (approval gate).** **Settings** → **Environments** → **New environment** → `production` → **Configure environment**:
 
 - Tick **Required reviewers** → add yourself.
 - Leave **Prevent self-review** unticked (otherwise you cannot approve your own runs).
@@ -218,7 +220,7 @@ Find `<subscription-id>`: Portal → Subscriptions → Azure for Students → Ov
 
 Any job that declares `environment: production` now pauses until you approve it.
 
-### Part D – Run the pipeline
+### Part D: Run the pipeline
 
 **D1. Open a pull request (CI).** In your fork open `app/index.html` → pencil icon → change the version text inside `<p id="version">…</p>` (e.g. to your student number) → **Commit changes** → choose **Create a new branch for this commit and start a pull request** → **Propose changes** → **Create pull request**.
 
@@ -248,7 +250,7 @@ The **Smoke test** step ends with `Live at http://<ip> with version <your-text>`
 
 ![No changes on rerun](images/11a-idempotent-plan-no-changes.png)
 
-### Part E – Hands-on: change the infrastructure
+### Part E: Hands-on: change the infrastructure
 
 Open port **8080** in the firewall, through a pull request.
 
@@ -271,7 +273,7 @@ Open port **8080** in the firewall, through a pull request.
 2. Commit to a **new branch** and open a pull request. Read the CI plan: which resource changes, and is it *updated in-place* (`~`) or *replaced* (`-/+`)?
 3. Merge, approve, and check in the portal: `icn-devops-rg` → `icn-devops-nsg` → **Inbound security rules** shows `Alt-HTTP`.
 
-### Part F – Clean up
+### Part F: Clean up
 
 **F1. Destroy through the pipeline.** **Actions** → **Destroy** → **Run workflow** → approve.
 
@@ -314,7 +316,7 @@ Expected: `Destroy complete! Resources: 8 destroyed.` The resource group `icn-de
 
 **Why this VM size.** Azure for Students only allows deployments in Norway East, Spain Central, Austria East, France Central and Germany West Central (subscription policy *Allowed resource deployment regions*). The classic free-tier size B1s is not available to the subscription in any of them. Among the sizes available, the cheapest Linux pay-as-you-go option was Standard_B2ats_v2 in Austria East at **USD 0.0108/hour** (Azure Retail Prices API, 9 Nov 2026). 1 GiB RAM is enough for nginx serving a static page.
 
-**Cost of one lab run** (VM up < 1 hour): VM ≈ USD 0.01, plus public IP, disk and state storage (a few cents per month). Measured cost of the reference run: *TODO (Cost Management)*.
+**Cost while the VM exists** (Azure retail prices, Austria East, November 2026): VM USD 0.0108/h + Standard static public IP USD 0.005/h + S4 Standard HDD disk USD 1.536/month (≈ USD 0.002/h) = **≈ USD 0.018 per hour**. A lab session of under an hour costs about 2 cents; the state storage costs a fraction of a cent per month.
 
 **Ways to minimise credit use:** destroy after each session (F1); do not pin an availability zone; LRS storage; smallest available VM size.
 
@@ -356,23 +358,32 @@ You have completed the lab when you can show:
 | Symptom | Cause | Fix |
 |---|---|---|
 | Workflows never start on your fork | Actions disabled on forks | Step A2 |
-| `AADSTS700213` / *No matching federated identity record found* | Federated credential does not match the token | Check owner/repo names and IDs (A4, B3). The error shows the subject GitHub sent; compare it with the credential |
+| `AADSTS700213` / *No matching federated identity record found* | Federated credential does not match the token | Check owner/repo names and IDs (A3, B3). The error shows the subject GitHub sent; compare it with the credential |
 | `AuthorizationFailed` | Role missing or given to another app | Step B4: role assignment for **your** app |
 | `RequestDisallowedByPolicy` or `SkuNotAvailable` | Region or size not allowed for your subscription | Change `location` / `vm_size` defaults in `infra/variables.tf` |
 | Storage account name already taken | Names are global | Choose another name; update `TF_STATE_STORAGE_ACCOUNT` |
-| Ansible: `Permission denied (publickey)` | Keys in C1 do not match | Paste both keys again from the same pair |
+| Ansible: `Permission denied (publickey)` | Keys in C2 do not match | Paste both keys again from the same pair |
 | *Error acquiring the state lock* | A cancelled run left the lock | Wait a minute and rerun; or break the lease on `demo.tfstate` in the `tfstate` container |
 
 ## 9. References
 
-- HashiCorp. *Terraform – azurerm backend*. developer.hashicorp.com/terraform/language/backend/azurerm
-- HashiCorp. *Terraform AzureRM provider documentation*. registry.terraform.io/providers/hashicorp/azurerm
-- Microsoft. *Workload identity federation*. learn.microsoft.com/entra/workload-id/workload-identity-federation
-- GitHub. *Configuring OpenID Connect in Azure*. docs.github.com (Actions → Security hardening → OpenID Connect)
-- GitHub. *Managing environments for deployment*. docs.github.com (Actions → Deployment → Environments)
-- Ansible. *Ansible documentation*. docs.ansible.com
+- HashiCorp. *Backend type: azurerm*. https://developer.hashicorp.com/terraform/language/backend/azurerm
+- Microsoft. *Workload identity federation*. https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation
+- Microsoft. *Configure an app to trust an external identity provider*. https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust
+- Microsoft. *Authenticate to Azure from GitHub Actions by OpenID Connect*. https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure-openid-connect
+- GitHub. *Configuring OpenID Connect in Azure*. https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-azure
+- GitHub. *Managing environments for deployment*. https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
+- GitHub. *Fork a repository*. https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo
+- Microsoft. *Use Azure Cloud Shell without a storage account*. https://learn.microsoft.com/en-us/azure/cloud-shell/get-started/ephemeral
+- Ansible. *Introduction to Ansible*. https://docs.ansible.com/ansible/latest/getting_started/introduction.html
 - G. Pestana. *ICN Laboratory 3 – Introduction to Microsoft Azure | VM & SQL Database*, 2026.
 
 ## 10. GenAI disclosure
 
-*TODO: to be completed by the author (format from Lab 02).*
+| Component | Tool | How it was used |
+|---|---|---|
+| Research and source checking | Claude (Anthropic) | Finding and checking sources, links and dates. References were confirmed by the author. |
+| Demo code | Claude (Anthropic) | Generating and fixing Terraform, Ansible and workflow code. Everything was tested by the author on Azure. |
+| This lab sheet | Claude (Anthropic) | Drafting from the steps the author executed; screenshots are the author's. |
+
+The author takes full responsibility for the content, the technical decisions and the conclusions of this work.
