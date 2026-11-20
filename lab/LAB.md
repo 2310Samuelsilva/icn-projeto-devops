@@ -343,6 +343,10 @@ Expected: `Destroy complete! Resources: 8 destroyed.` The resource group `icn-de
 
 **Cost while the VM exists** (Azure retail prices, Austria East, November 2026): VM USD 0.0108/h + Standard static public IP USD 0.005/h + S4 Standard HDD disk USD 1.536/month (≈ USD 0.002/h) = **≈ USD 0.018 per hour**. A lab session of under an hour costs about 2 cents; the state storage costs a fraction of a cent per month.
 
+**Measured cost of the reference build** (Cost Management, 9 to 20 November 2026, all runs of this project): **€0.01** in total, mostly the public IP (billed under Virtual Network).
+
+![Cost analysis for the reference build](images/13-cost-analysis.png)
+
 **Ways to minimise credit use:** destroy after each session (F1); do not pin an availability zone; LRS storage; smallest available VM size.
 
 ## 5. Expected result
