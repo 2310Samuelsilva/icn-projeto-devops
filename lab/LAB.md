@@ -414,10 +414,10 @@ You have completed the lab when you can show:
 
 ## 10. GenAI disclosure
 
-| Component | Tool | How it was used |
-|---|---|---|
-| Research and source checking | Claude (Anthropic) | Finding and checking sources, links and dates. References were confirmed by the author. |
-| Demo code | Claude (Anthropic) | Generating and fixing Terraform, Ansible and workflow code. Everything was tested by the author on Azure. |
-| This lab sheet | Claude (Anthropic) | Drafting from the steps the author executed; screenshots are the author's. |
+I used generative AI (Claude, by Anthropic) to support:
 
-The author takes full responsibility for the content, the technical decisions and the conclusions of this work.
+- research and checking of sources;
+- structuring and writing the presentation, the speaker notes and this lab sheet;
+- writing the demo code.
+
+The topic, the technical decisions and the content are my own. I created and tested all the infrastructure on Azure and GitHub myself. I reviewed and validated all the material and take full responsibility for it.
