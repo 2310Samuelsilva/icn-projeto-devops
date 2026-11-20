@@ -89,6 +89,13 @@ Six parts. Times are indicative.
 - `https://api.github.com/users/<github-username>` → `<owner-id>`
 - `https://api.github.com/repos/<github-username>/icn-projeto-devops` → `<repo-id>`
 
+> **How the pieces connect.** The pipeline runs Terraform on GitHub's servers, and Terraform needs Azure even to make a plan: it reads the state and what already exists. So the pipeline needs its own identity in Azure, and no password is stored anywhere:
+>
+> 1. GitHub gives each job a short-lived token that says where the job comes from.
+> 2. Microsoft Entra ID checks the token against the rules you create in B3 (federated credentials).
+> 3. If one rule matches, the job logs in as your app registration (B2).
+> 4. Every action is then checked against the app's role (B4).
+
 ### Part B: Azure: storage, identity, permissions
 
 **B1. Storage for the Terraform state.** Terraform records what it has built in a *state file*. The pipeline runs on a fresh machine every time, so the state must live somewhere permanent: an Azure Storage account.
@@ -146,6 +153,16 @@ Add **three** credentials, all with Organization `<github-username>`, Organizati
 | `github-pr` | Pull request | (none) | CI on pull requests |
 | `github-production` | Environment | `production` | Deploy and destroy jobs (behind the approval gate) |
 
+**Why three?** The token's *subject* depends on the kind of job, and Azure only accepts a token whose subject matches one rule exactly. All three rules lead to the same app, with the same permissions.
+
+| Job in this repository | The token says (subject ends with) | Rule that accepts it |
+|---|---|---|
+| `ci.yml`, job *check* (pull request) | `:pull_request` | `github-pr` |
+| `cd.yml`, job *plan* (on `main`, no environment) | `:ref:refs/heads/main` | `github-main` |
+| `cd.yml`, job *deploy* and `destroy.yml`, job *destroy* | `:environment:production` | `github-production` |
+
+`production` is a **GitHub** environment (where the approval rule lives, Part C), not an Azure one. When a job uses an environment, GitHub puts the environment in the subject instead of the branch. Repositories created after 15 July 2026 also include the numeric owner and repository IDs in the subject (`repo:OWNER@ID/REPO@ID:…`), which is why the portal asks for them.
+
 Leave the generated *Subject identifier* unchanged.
 
 ![Federated credential for branch main](images/3c-federated-credential-main.png)
@@ -165,6 +182,8 @@ Leave the generated *Subject identifier* unchanged.
 ![Member selected](images/4c-members-app-selected.png)
 
 - **Review + assign**. The scope is your subscription.
+
+> **What this permission covers.** A role given at a scope applies to everything below it, so Contributor on the subscription lets the pipeline manage every resource in your subscription, not only the demo. It cannot assign roles to anyone, cannot reach other subscriptions, and does not give any rights in Microsoft Entra ID (users, other apps). In production you would follow *least privilege* and give Contributor only on the application's resource groups; they would then have to be created in the bootstrap, because Terraform cannot be given access to a resource group that does not exist yet.
 
 ![Review + assign](images/4d-review-assign.png)
 
@@ -340,6 +359,8 @@ Expected: `Destroy complete! Resources: 8 destroyed.` The resource group `icn-de
 7. The NSG allows SSH (22) from any IP address. Why was that necessary here, which risk does it create, and how could it be reduced?
 8. Why does the destroy workflow also require approval? Why should you not delete `icn-devops-rg` directly in the portal?
 9. Name the AWS and Google Cloud equivalents of: Terraform state in Azure Storage, the app registration with federated credentials, and Azure Bicep.
+10. If you deleted the `github-production` federated credential, which jobs would fail, and why?
+11. The app has Contributor on the whole subscription. How would you reduce that, and what would you have to change in the bootstrap?
 
 ## 7. Completion criteria
 
@@ -376,6 +397,9 @@ You have completed the lab when you can show:
 - GitHub. *Fork a repository*. https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo
 - Microsoft. *Use Azure Cloud Shell without a storage account*. https://learn.microsoft.com/en-us/azure/cloud-shell/get-started/ephemeral
 - Ansible. *Introduction to Ansible*. https://docs.ansible.com/ansible/latest/getting_started/introduction.html
+- GitHub. *OpenID Connect reference* (subject claims). https://docs.github.com/en/actions/reference/security/oidc
+- Microsoft. *Understand scope for Azure RBAC*. https://learn.microsoft.com/en-us/azure/role-based-access-control/scope-overview
+- Microsoft. *Azure roles, Microsoft Entra roles, and classic subscription administrator roles*. https://learn.microsoft.com/en-us/azure/role-based-access-control/rbac-and-directory-admin-roles
 - G. Pestana. *ICN Laboratory 3 – Introduction to Microsoft Azure | VM & SQL Database*, 2026.
 
 ## 10. GenAI disclosure
