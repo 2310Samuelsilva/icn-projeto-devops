@@ -6,6 +6,10 @@ name: CD
 on:
   push:
     branches: [main]
+    # Documentation-only pushes do not deploy.
+    paths-ignore:
+      - "lab/**"
+      - "README.md"
   workflow_dispatch: # also allow a manual run from the Actions tab
 
 permissions:
