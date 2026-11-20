@@ -113,6 +113,8 @@ Portal → **Storage accounts** → **+ Create**:
 
 Leave the other tabs on their defaults → **Review + create** → **Create**.
 
+> Use your **own** storage account. Two repositories pointing at the same state file manage the same resources: a run in one would change or destroy what the other created.
+
 ![Storage account, Basics tab](images/1a-storage-account-basics.png)
 
 ![Deployment succeeded](images/1b-storage-account-deployed.png)
@@ -164,6 +166,8 @@ Add **three** credentials, all with Organization `<github-username>`, Organizati
 `production` is a **GitHub** environment (where the approval rule lives, Part C), not an Azure one. When a job uses an environment, GitHub puts the environment in the subject instead of the branch. Repositories created after 15 July 2026 also include the numeric owner and repository IDs in the subject (`repo:OWNER@ID/REPO@ID:…`), which is why the portal asks for them.
 
 Leave the generated *Subject identifier* unchanged.
+
+> **Careful:** *Repository* is the repository **name** (`icn-projeto-devops`) and *Repository ID* is the **number** from A3. Typing the number in the name field still saves, but every login then fails with `AADSTS700213`, and the error message shows the subject GitHub actually sent.
 
 ![Federated credential for branch main](images/3c-federated-credential-main.png)
 
@@ -242,6 +246,8 @@ Any job that declares `environment: production` now pauses until you approve it.
 ### Part D: Run the pipeline
 
 **D1. Open a pull request (CI).** In your fork open `app/index.html` → pencil icon → change the version text inside `<p id="version">…</p>` (e.g. to your student number) → **Commit changes** → choose **Create a new branch for this commit and start a pull request** → **Propose changes** → **Create pull request**.
+
+> After **Propose changes**, GitHub shows a **Comparing changes** page. Nothing runs yet: click **Create pull request** to start CI.
 
 ![Editing index.html](images/10a-index-html-v1.png)
 
