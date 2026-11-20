@@ -9,7 +9,7 @@ Group G7. Samuel Silva (202200315)
 
 | | |
 |---|---|
-| Duration | ~60 minutes |
+| Duration | ~75 minutes |
 | Cost | ~2 cents of Azure for Students credit (VM, public IP and disk for < 1 hour) |
 | Platform | Microsoft Azure (Azure for Students), GitHub |
 | Works on | Any OS with a browser (Windows, macOS, Linux) |
@@ -71,7 +71,7 @@ Six parts. Times are indicative.
 | B | Azure: state storage, pipeline identity, permissions | 20 min |
 | C | SSH key, GitHub variables and secret, approval environment | 15 min |
 | D | Run the pipeline: pull request → approve → live → idempotent rerun | 10 min |
-| E | Hands-on: change the infrastructure | 5 min |
+| E | Exercises: apply what you saw | 20 min |
 | F | Clean up | 5 min |
 
 > Parts B and C are a one-time setup (a *bootstrap*): the pipeline needs an identity and a place for its state before it can run. Real teams often script this step too, for example with Terraform providers for Entra ID and GitHub. Everything after Part C is automated.
@@ -275,28 +275,22 @@ The **Smoke test** step ends with `Live at http://<ip> with version <your-text>`
 
 ![No changes on rerun](images/11a-idempotent-plan-no-changes.png)
 
-### Part E: Hands-on: change the infrastructure
+### Part E: Exercises
 
-Open port **8080** in the firewall, through a pull request.
+Now apply what you saw. Each exercise gives a goal and a hint, not the answer. Make every change through a **pull request**, as in D1, and read what the pipeline tells you. Solutions are provided separately by the author.
 
-1. Open `infra/main.tf` → pencil icon. Inside `azurerm_network_security_group.nsg`, after the `HTTP` rule, add:
+**E1. Open a port (Infrastructure as Code).** Open port **8080** in the firewall.
+- Hint: the firewall is `azurerm_network_security_group.nsg` in `infra/main.tf`, and it already has a rule for port 80.
+- Before merging, read the CI plan. How many resources change? Is the change made *in place* (`~`) or does the resource have to be *replaced* (`-/+`)?
+- After merging and approving, check the new rule in the portal: `icn-devops-rg` → `icn-devops-nsg` → **Inbound security rules**.
 
-   ```hcl
-     security_rule {
-       name                       = "Alt-HTTP"
-       priority                   = 120
-       direction                  = "Inbound"
-       access                     = "Allow"
-       protocol                   = "Tcp"
-       source_port_range          = "*"
-       destination_port_range     = "8080"
-       source_address_prefix      = "*"
-       destination_address_prefix = "*"
-     }
-   ```
+**E2. Let CI catch a mistake (Continuous Integration).** In a new pull request, break `infra/main.tf` on purpose, for example by deleting one `{`.
+- Which CI step fails, and what does the error say?
+- Fix the file in the same pull request and check that CI turns green. Close the pull request without merging if you prefer.
 
-2. Commit to a **new branch** and open a pull request. Read the CI plan: which resource changes, and is it *updated in-place* (`~`) or *replaced* (`-/+`)?
-3. Merge, approve, and check in the portal: `icn-devops-rg` → `icn-devops-nsg` → **Inbound security rules** shows `Alt-HTTP`.
+**E3. Change the server, not the infrastructure (configuration management).** Make the website also serve a page `/sobre.html` with your name, without touching anything in `infra/`.
+- Hint: the playbook already copies one page to the server; look at how it does it.
+- After merging and approving: what does the Terraform step report, and what does the Ansible recap say? Open `http://<ip>/sobre.html`.
 
 ### Part F: Clean up
 
@@ -355,7 +349,7 @@ Expected: `Destroy complete! Resources: 8 destroyed.` The resource group `icn-de
 - Merging starts CD, which **waits for your approval** before changing Azure.
 - After approval the page is reachable at the VM's public IP and shows your text; the smoke test confirms it.
 - A rerun with no changes reports *No changes* and `changed=0`.
-- The port-8080 change appears as a single in-place update to the NSG.
+- E1: the port-8080 change is a single in-place update to the firewall. E2: CI fails before anything reaches Azure. E3: Terraform reports no infrastructure changes while Ansible updates the server.
 - After **Destroy**, `icn-devops-rg` no longer exists; `icn-devops-tfstate-rg` remains.
 
 ## 6. Analysis questions
@@ -380,7 +374,9 @@ You have completed the lab when you can show:
 - [ ] A CD run that waited for approval and then passed the smoke test
 - [ ] The web page in your browser with your text
 - [ ] A rerun with *No changes* and Ansible `changed=0`
-- [ ] The CI plan for port 8080 showing one in-place change
+- [ ] E1: the CI plan for port 8080 and the new rule in the portal
+- [ ] E2: a failed CI run and the same pull request fixed
+- [ ] E3: your `/sobre.html` page online
 - [ ] A Destroy run ending in `8 destroyed`
 - [ ] Written answers to the analysis questions
 
